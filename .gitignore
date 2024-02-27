@@ -1,0 +1,6 @@
+/target
+.vscode
+.pnpm-store
+node_modules
+/.env
+/ui/dist

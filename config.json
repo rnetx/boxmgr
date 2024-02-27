@@ -1,0 +1,7 @@
+{
+  "log_level": "debug",
+  "secret": "admin",
+  "database_url": "sqlite:///tmp/db.sqlite?mode=rwc",
+  "listen": "0.0.0.0:9077",
+  "temp_dir": "/tmp"
+}

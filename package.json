@@ -1,0 +1,6 @@
+{
+	"dependencies": {
+		"nprogress": "^0.2.0",
+		"vue-i18n": "9"
+	}
+}
