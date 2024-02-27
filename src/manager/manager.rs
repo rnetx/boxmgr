@@ -95,7 +95,12 @@ impl Manager {
         })?;
         log::info!("Service is started");
         log::info!("HTTP Server is running on {}", &http_server.listen);
-        http_server.run(cancel_token).await?;
+        tokio::select! {
+            _ = cancel_token.cancelled() => {}
+            res = http_server.run() => {
+                res?
+            }
+        }
         log::warn!("HTTP Server is stopped");
         if let Some(db) = self.database.read().unwrap().clone().take() {
             log::info!("Close Database Connection");

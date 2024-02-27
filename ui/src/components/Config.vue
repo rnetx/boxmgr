@@ -26,7 +26,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column align="center" width="350">
+      <el-table-column align="center" width="400">
         <template #header>
           <el-button-group>
             <el-button

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const baseURL = 'http://127.0.0.1:9077';
-//const baseURL = '';
+//const baseURL = 'http://127.0.0.1:9077';
+const baseURL = '';
 
 const service = axios.create({
   baseURL: baseURL,

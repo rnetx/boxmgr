@@ -62,14 +62,14 @@ impl ScriptHandler {
     async fn run_script(label: &str, manager: &Manager, script: &Option<database::Script>) {
         if let Some(script) = script {
             log::debug!("service: run {}: tag: {}", label, script.tag);
-            let temp_script_file_name =
-                label.replace(" ", "_") + "_" + common::random_uuid().replace("-", "").as_str();
+            let temp_script_file_name = common::random_uuid().replace("-", "");
             let mut temp_script_file = manager.get_temp_dir_path().join(temp_script_file_name);
             Self::set_extension(&mut temp_script_file);
             {
+                std::fs::remove_file(&temp_script_file).ok();
                 let mut f = match fs::File::options()
                     .create(true)
-                    .truncate(false)
+                    .write(true)
                     .open(&temp_script_file)
                     .await
                 {
@@ -90,22 +90,11 @@ impl ScriptHandler {
             {
                 use std::os::unix::fs::PermissionsExt;
 
-                let f = match std::fs::File::open(&temp_script_file) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::error!("service: {}: set permission failed: {}", label, e);
-                        return;
-                    }
-                };
-                let metadata = match f.metadata() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::error!("service: {}: set permission failed: {}", label, e);
-                        return;
-                    }
-                };
-                let mut permissions = metadata.permissions();
-                permissions.set_mode(0o755);
+                let permission = std::fs::Permissions::from_mode(0o755);
+                if let Err(e) = std::fs::set_permissions(&temp_script_file, permission) {
+                    log::error!("service: {}: set permission failed: {}", label, e);
+                    return;
+                }
             }
 
             match Command::new(&temp_script_file).output().await {

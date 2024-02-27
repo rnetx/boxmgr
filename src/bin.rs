@@ -1,13 +1,14 @@
-extern crate libboxmgr;
+extern crate boxmgr;
 
 use std::{fs, net::SocketAddr, process::exit};
 
-use libboxmgr::manager::{Manager as boxManager, ManagerOptions};
+use boxmgr::manager::{Manager as boxManager, ManagerOptions};
 
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Parser)]
+#[command(version, about = "a sing-box manager", long_about = None)]
 struct Cli {
     #[clap(short, long, default_value = "config.json")]
     config: String,
@@ -28,12 +29,12 @@ impl Options {
     fn to_manager_options(self) -> Result<ManagerOptions, String> {
         let log_file = match self.log_file {
             Some(f) => match f.as_str() {
-                "stdout" | "" => libboxmgr::log::LogOutput::stdout(),
-                "stderr" => libboxmgr::log::LogOutput::stderr(),
-                "off" => libboxmgr::log::LogOutput::nop(),
-                _ => libboxmgr::log::LogOutput::file(&f).map_err(|e| e.to_string())?,
+                "stdout" | "" => boxmgr::log::LogOutput::stdout(),
+                "stderr" => boxmgr::log::LogOutput::stderr(),
+                "off" => boxmgr::log::LogOutput::nop(),
+                _ => boxmgr::log::LogOutput::file(&f).map_err(|e| e.to_string())?,
             },
-            None => libboxmgr::log::LogOutput::stdout(),
+            None => boxmgr::log::LogOutput::stdout(),
         };
         Ok(ManagerOptions {
             log_level: self.log_level,

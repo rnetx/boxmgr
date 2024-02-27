@@ -403,7 +403,12 @@ const editClick = (id) => {
     .then((res) => {
       editorID.value = res.id;
       editorTag.value = res.tag;
-      editorData.value = JSON.stringify(res.script, null, 2);
+      try {
+        let obj = JSON.parse(res.content);
+        editorData.value = JSON.stringify(obj, null, 2);
+      } catch (_) {
+        editorData.value = res.content;
+      }
       editorTitle.value = t('script.edit_script', { tag: editorTag.value });
       editorType.value = 2; // edit
       editorVisible.value = true;
@@ -430,7 +435,12 @@ const viewClick = (id) => {
   getScript(id)
     .then((res) => {
       editorTag.value = res.tag;
-      editorData.value = JSON.stringify(res.script, null, 2);
+      try {
+        let obj = JSON.parse(res.content);
+        editorData.value = JSON.stringify(obj, null, 2);
+      } catch (_) {
+        editorData.value = res.content;
+      }
       editorTitle.value = t('script.view_script', { tag: editorTag.value });
       editorType.value = 3; // view
       editorVisible.value = true;

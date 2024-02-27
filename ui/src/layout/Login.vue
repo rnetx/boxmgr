@@ -96,7 +96,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  window.addEventListener('keydown', enterHandle, false);
+  window.removeEventListener('keydown', enterHandle);
 });
 </script>
 

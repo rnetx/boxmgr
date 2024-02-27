@@ -4,12 +4,11 @@ use axum::{
     body::Body,
     extract::Request,
     http::StatusCode,
-    response::Response,
+    response::{IntoResponse, Redirect, Response},
     routing::{delete, get, patch, post, put},
     Router,
 };
 use tokio::net::TcpListener;
-use tokio_util::sync::CancellationToken;
 use tower_http::{
     auth::{AsyncAuthorizeRequest, AsyncRequireAuthorizationLayer},
     cors::{Any, CorsLayer},
@@ -39,25 +38,22 @@ impl HTTPServer {
         // 128 MB
         api_router = api_router.layer(RequestBodyLimitLayer::new(128 * 1024 * 1024));
         // Cors
-        api_router = Self::cors(api_router);
+        // api_router = Self::cors(api_router);
         //
         let api_router = api_router.with_state::<()>(manager);
         //
         let mut router = Router::new();
-        let assets = axum_embed::ServeEmbed::<Assets>::new();
-        router = router.nest_service("/", assets);
+        router = router
+            .nest_service("/", get(webui))
+            .fallback(|| async { Redirect::temporary("/") });
         router = router.nest_service("/api/v1", api_router);
         //
         Self { router, listen }
     }
 
-    pub(crate) async fn run(
-        self,
-        cancel_token: CancellationToken,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    pub(crate) async fn run(self) -> Result<(), Box<dyn Error + Send + Sync>> {
         let tcp_listener = TcpListener::bind(self.listen).await?;
         axum::serve(tcp_listener, self.router)
-            .with_graceful_shutdown(async move { cancel_token.cancelled().await })
             .await
             .map_err(|e| format!("{}", e).into())
     }
@@ -161,9 +157,27 @@ impl HTTPServer {
     }
 }
 
+// Static Files
+
 #[derive(rust_embed::RustEmbed, Clone)]
 #[folder = "ui/dist/"]
 struct Assets;
+
+async fn webui(req: Request) -> impl IntoResponse {
+    let mut path = req.uri().path().trim_start_matches('/').to_string();
+    if path.is_empty() {
+        path.push_str("index.html");
+    }
+    match Assets::get(&path) {
+        Some(f) => {
+            let mime_type = mime_guess::from_path(&path).first_or_octet_stream();
+            ([(http::header::CONTENT_TYPE, mime_type.as_ref())], f.data).into_response()
+        }
+        None => Redirect::temporary("/").into_response(),
+    }
+}
+
+// Auth
 
 #[derive(Clone)]
 pub(crate) struct AuthMiddleware {
