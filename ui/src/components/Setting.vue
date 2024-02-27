@@ -2,7 +2,7 @@
   <div class="form">
     <el-form>
       <el-form-item :label="$t('setting.language')">
-        <el-select v-model="locale">
+        <el-select v-model="locale" @change="setLocale">
           <el-option
             v-for="item in locales"
             :key="item.locale"
@@ -98,6 +98,10 @@ import {
 } from '@/api/service';
 
 const { t, locale } = useI18n();
+
+const setLocale = () => {
+  localStorage.setItem('locale', locale.value);
+};
 
 const corePath = ref('');
 const isCorePathLoading = ref(false);

@@ -488,6 +488,7 @@ const resizeHandle = () => {
 };
 
 onMounted(() => {
+  resizeHandle();
   window.addEventListener('resize', resizeHandle);
   refreshConfigList();
   openWebsocketChannel();
