@@ -33,4 +33,6 @@
 > cargo build --release
 ```
 
-##
+## License
+
+This project adopts GPLv3 open source.
