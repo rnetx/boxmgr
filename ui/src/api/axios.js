@@ -5,7 +5,7 @@ const baseURL = '';
 
 const service = axios.create({
   baseURL: baseURL,
-  timeout: 5000,
+  timeout: 30000,
 });
 
 service.interceptors.request.use((config) => {

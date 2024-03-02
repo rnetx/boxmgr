@@ -2,7 +2,7 @@ use std::{error::Error, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
 
 use axum::{
     body::Body,
-    extract::Request,
+    extract::{DefaultBodyLimit, Request},
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
     routing::{delete, get, patch, post, put},
@@ -35,8 +35,10 @@ impl HTTPServer {
             secret,
         }));
         // Request Body Limit
-        // 128 MB
-        api_router = api_router.layer(RequestBodyLimitLayer::new(128 * 1024 * 1024));
+        // 256 MB
+        api_router = api_router
+            .layer(DefaultBodyLimit::disable())
+            .layer(RequestBodyLimitLayer::new(256 * 1024 * 1024));
         // Cors
         // api_router = Self::cors(api_router);
         //

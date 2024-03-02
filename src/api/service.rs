@@ -1,12 +1,13 @@
 use std::{
-    fs,
+    path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 
 use axum::{http::StatusCode, response::IntoResponse};
-use tokio::sync::mpsc;
+use futures_util::{Stream, TryStreamExt};
+use tokio::{fs, io, sync::mpsc};
 
-use crate::{database, manager::Manager};
+use crate::{database, manager::Manager, service};
 
 use super::generic;
 
@@ -59,57 +60,65 @@ pub(crate) struct UploadCoreResponseBody {
 }
 
 // Upload Core: POST ../service/core_path
-pub(crate) async fn upload_core_path(mut ctx: generic::RequestMultiPartContext) -> impl IntoResponse {
-    match ctx.multipart.next_field().await {
-        Ok(Some(field)) => {
-            let filename = field.file_name().unwrap_or("sing-box").to_string();
-            let data = match field.bytes().await {
-                Ok(v) => v,
-                Err(e) => {
-                    return generic::GenericResponse::new(
-                        StatusCode::BAD_REQUEST,
-                        format!("failed to receive file: {}", e),
-                    )
-                    .into_response();
-                }
-            };
-            let filename_temp = filename.clone() + ".temp";
-            let filepath = ctx.manager.get_data_dir_path().join(&filename);
-            let filepath_temp = ctx.manager.get_data_dir_path().join(&filename_temp);
-            if let Err(e) = fs::write(&filepath_temp, data) {
-                fs::remove_file(filepath_temp).ok();
+pub(crate) async fn upload_core_path(
+    mut ctx: generic::RequestMultiPartContext,
+) -> impl IntoResponse {
+    while let Ok(Some(field)) = ctx.multipart.next_field().await {
+        let filename = field
+            .file_name()
+            .map(|s| s.to_string())
+            .or(field.name().map(|s| s.to_string()))
+            .unwrap_or(service::Service::default_core_filename());
+        match save_core(&ctx.manager, filename, field).await {
+            Ok(path) => {
                 return generic::GenericResponse::new(
-                    StatusCode::BAD_REQUEST,
-                    format!("failed to write file: {}", e),
+                    StatusCode::OK,
+                    UploadCoreResponseBody {
+                        path: path.to_string_lossy().to_string(),
+                    },
                 )
                 .into_response();
             }
-            if let Err(e) = fs::rename(&filepath_temp, &filepath) {
-                fs::remove_file(filepath_temp).ok();
-                return generic::GenericResponse::new(
-                    StatusCode::BAD_REQUEST,
-                    format!("failed to rename file: {}", e),
-                )
-                .into_response();
+            Err(e) => {
+                return generic::ErrorResponse::new(StatusCode::BAD_REQUEST, e).into_response();
             }
-            generic::GenericResponse::new(
-                StatusCode::OK,
-                UploadCoreResponseBody {
-                    path: filepath.to_string_lossy().to_string(),
-                },
-            )
-            .into_response()
         }
-        Ok(None) => {
-            generic::GenericResponse::new(StatusCode::BAD_REQUEST, "missing file in multipart form")
-                .into_response()
-        }
-        Err(e) => generic::GenericResponse::new(
-            StatusCode::BAD_REQUEST,
-            format!("failed to receive file: {}", e),
-        )
-        .into_response(),
     }
+    generic::GenericResponse::new(StatusCode::BAD_REQUEST, "missing file data").into_response()
+}
+
+async fn save_core<S, E>(manager: &Manager, filename: String, stream: S) -> Result<PathBuf, String>
+where
+    S: Stream<Item = Result<axum::body::Bytes, E>>,
+    E: Into<axum::BoxError>,
+{
+    let filename = manager.get_data_dir_path().join(filename);
+    let mut temp_filename = filename.clone();
+    temp_filename.set_extension("temp");
+    {
+        // Save Core To Temp File
+        let stream_reader = tokio_util::io::StreamReader::new(
+            stream.map_err(|err| std::io::Error::new(io::ErrorKind::Other, err)),
+        );
+        futures_util::pin_mut!(stream_reader);
+        let _ = fs::remove_file(&temp_filename).await;
+        let temp_file = fs::File::create(&temp_filename)
+            .await
+            .map_err(|e| format!("failed to create temp file: {}", e.to_string()))?;
+        let mut temp_file_buf_writer = io::BufWriter::new(temp_file);
+        if let Err(e) = io::copy(&mut stream_reader, &mut temp_file_buf_writer).await {
+            return Err(format!("failed to receive core: {}", e.to_string()));
+        }
+    }
+    // Check Core File
+    service::Service::check_core_is_valid(&temp_filename)
+        .await
+        .map_err(|e| format!("invalid core: {}", e))?;
+    // Rename Temp File
+    if let Err(e) = fs::rename(temp_filename, &filename).await {
+        return Err(format!("failed to rename temp file: {}", e.to_string()));
+    }
+    Ok(filename)
 }
 
 // Get Config: GET ../service/config

@@ -1,7 +1,7 @@
 use std::{
     error::Error,
-    fs,
     net::SocketAddr,
+    path::PathBuf,
     process::Stdio,
     str::FromStr,
     sync::{
@@ -85,7 +85,7 @@ impl ServiceInner {
         {
             use std::os::unix::fs::PermissionsExt;
 
-            let f = fs::File::open(&core_path)?;
+            let f = std::fs::File::open(&core_path)?;
             let metadata = f.metadata()?;
             let mut permissions = metadata.permissions();
             permissions.set_mode(0o755);
@@ -599,5 +599,46 @@ impl Service {
         let notify = self.status.clone_notify();
         let status = self.status.as_ref();
         (notify, status)
+    }
+
+    pub(crate) async fn check_core_is_valid(
+        core_path: &PathBuf,
+    ) -> Result<bool, Box<dyn Error + Send + Sync>> {
+        // Set Permission
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let f = std::fs::File::open(core_path)?;
+            let metadata = f.metadata()?;
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(0o755);
+        }
+
+        let output = Command::new(core_path).args(["version"]).output().await?;
+
+        Ok(
+            if String::from_utf8_lossy(&output.stdout)
+                .to_string()
+                .contains("sing-box version")
+            {
+                true
+            } else {
+                false
+            },
+        )
+    }
+
+    pub(crate) fn default_core_filename() -> String {
+        const NAME: &str = "sing-box";
+
+        let mut filename = PathBuf::from(NAME);
+
+        #[cfg(target_os = "windows")]
+        {
+            filename.set_extension("exe");
+        }
+
+        filename.to_string_lossy().to_string()
     }
 }
