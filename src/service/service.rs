@@ -77,7 +77,7 @@ impl ServiceInner {
         status.notify();
         let script_handler = super::ScriptHandler::new(manager).await?;
         // Check Config
-        let (listen, secret) = Self::check_config(&mut config.config);
+        let (listen, secret) = Self::check_config(&mut config.config)?;
         let listen = SocketAddr::from_str(&listen)?;
 
         // Set Permission
@@ -189,10 +189,24 @@ impl ServiceInner {
         })
     }
 
-    fn check_config(config: &mut serde_json::Value) -> (String, Option<String>) {
+    fn check_config(
+        config: &mut serde_json::Value,
+    ) -> Result<(String, Option<String>), Box<dyn Error + Send + Sync>> {
         let map = match config {
             serde_json::Value::Object(m) => m,
-            _ => unreachable!(),
+            serde_json::Value::String(s) => {
+                let map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(s)
+                    .map_err::<Box<dyn Error + Send + Sync>, _>(|err| {
+                        log::error!("service: invalid config: {}", &err);
+                        format!("service: invalid config: {}", err).into()
+                    })?;
+                *config = serde_json::Value::Object(map);
+                match config {
+                    serde_json::Value::Object(m) => m,
+                    _ => unreachable!(),
+                }
+            }
+            _ => return Err("service: invalid config".into()),
         };
         if let Some(serde_json::Value::Object(log)) = map.get_mut("log") {
             log.remove("disabled");
@@ -231,12 +245,12 @@ impl ServiceInner {
             };
         if let Some(serde_json::Value::Object(experimental)) = map.get_mut("experimental") {
             if let Some(serde_json::Value::Object(clash_api)) = experimental.get_mut("clash_api") {
-                init_clash_api_map(clash_api, false)
+                Ok(init_clash_api_map(clash_api, false))
             } else {
                 let mut clash_api_map = serde_json::Map::new();
                 let (listen, secret) = init_clash_api_map(&mut clash_api_map, true);
                 experimental.insert("clash_api".into(), serde_json::Value::Object(clash_api_map));
-                (listen, secret)
+                Ok((listen, secret))
             }
         } else {
             let mut experimental_map = serde_json::Map::new();
@@ -247,7 +261,7 @@ impl ServiceInner {
                 "experimental".into(),
                 serde_json::Value::Object(experimental_map),
             );
-            (listen, secret)
+            Ok((listen, secret))
         }
     }
 
