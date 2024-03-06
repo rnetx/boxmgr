@@ -286,19 +286,8 @@ const editorConfirmHandle = () => {
     }
     let obj = {
       tag: editorTag.value,
-      config: {},
+      config: editorData.value,
     };
-    try {
-      obj.config = JSON.parse(editorData.value);
-    } catch (err) {
-      ElMessage({
-        showClose: true,
-        type: 'error',
-        message: t('config.config_must_be_json'),
-      });
-      confirming.close();
-      return;
-    }
     addConfig(obj)
       .then(() => {
         ElMessage({
@@ -336,19 +325,8 @@ const editorConfirmHandle = () => {
     }
     let obj = {
       tag: editorTag.value,
-      config: {},
+      config: editorData.value,
     };
-    try {
-      obj.config = JSON.parse(editorData.value);
-    } catch (err) {
-      ElMessage({
-        showClose: true,
-        type: 'error',
-        message: t('config.config_must_be_json'),
-      });
-      confirming.close();
-      return;
-    }
     modifyConfig(editorID.value, obj)
       .then(() => {
         ElMessage({
@@ -392,7 +370,11 @@ const editClick = (id) => {
     .then((res) => {
       editorID.value = res.id;
       editorTag.value = res.tag;
-      editorData.value = JSON.stringify(res.config, null, 2);
+      if (typeof res.config === 'object') {
+        editorData.value = JSON.stringify(res.config, null, 2);
+      } else {
+        editorData.value = res.config;
+      }
       editorTitle.value = t('config.edit_config', { tag: editorTag.value });
       editorType.value = 2; // edit
       editorVisible.value = true;
@@ -419,7 +401,16 @@ const viewClick = (id) => {
   getConfig(id)
     .then((res) => {
       editorTag.value = res.tag;
-      editorData.value = JSON.stringify(res.config, null, 2);
+      if (typeof res.config === 'object') {
+        try {
+          const sorted = assign({}, res.config, Object.keys(res.config).sort());
+          editorData.value = stringify(sorted, null, 2);
+        } catch (_) {
+          editorData.value = res.config;
+        }
+      } else {
+        editorData.value = res.config;
+      }
       editorTitle.value = t('config.view_config', { tag: editorTag.value });
       editorType.value = 3; // view
       editorVisible.value = true;

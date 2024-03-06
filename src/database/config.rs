@@ -42,6 +42,7 @@ pub(crate) async fn add_config(
     }
     match &config.config {
         serde_json::Value::Object(_) => {}
+        serde_json::Value::String(_) => {}
         serde_json::Value::Null => return Err(super::Error::ConfigMissingConfig),
         _ => return Err(super::Error::ConfigInvalidConfig),
     }
@@ -100,6 +101,7 @@ pub(crate) async fn modify_config(
     if let ActiveValue::Set(v) = &config.config {
         match &v {
             serde_json::Value::Object(_) => {}
+            serde_json::Value::String(_) => {}
             serde_json::Value::Null => return Err(super::Error::ConfigMissingConfig),
             _ => return Err(super::Error::ConfigInvalidConfig),
         }

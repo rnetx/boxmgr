@@ -53,7 +53,6 @@
       "actived_config": "Actived Config",
       "set_as_actived_config": "Set as actived config",
       "tag_cannot_be_empty": "Tag cannot be empty",
-      "config_must_be_json": "Config must be a valid JSON",
       "add_config_success": "Add config success",
       "add_config_failed": "Add config failed: {err}",
       "edit_config_success": "Edit config success",

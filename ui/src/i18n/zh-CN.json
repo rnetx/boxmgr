@@ -53,7 +53,6 @@
       "actived_config": "活动配置",
       "set_as_actived_config": "设置为活动配置",
       "tag_cannot_be_empty": "标签不能为空",
-      "config_must_be_json": "配置必须是有效的 JSON",
       "add_config_success": "添加配置成功",
       "add_config_failed": "添加配置失败：{err}",
       "edit_config_success": "编辑配置成功",

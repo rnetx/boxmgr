@@ -149,18 +149,7 @@ const confirmHandle = () => {
     });
     return;
   }
-  let configObj = {};
-  try {
-    configObj = JSON.parse(config.value);
-  } catch (err) {
-    ElMessage({
-      showClose: true,
-      type: 'error',
-      message: t('config.config_must_be_json'),
-    });
-    return;
-  }
-  emits('config-handle', tag.value, configObj);
+  emits('config-handle', tag.value, config.value);
 };
 
 onMounted(() => {
