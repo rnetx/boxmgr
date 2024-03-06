@@ -21,6 +21,7 @@ struct Options {
     database_url: Option<String>,
     secret: String,
     listen: SocketAddr,
+    local_listen_port: Option<u16>,
     data_dir: String,
     temp_dir: String,
 }
@@ -42,6 +43,7 @@ impl Options {
             database_url: self.database_url,
             secret: self.secret,
             listen: self.listen,
+            local_listen_port: self.local_listen_port,
             data_dir: self.data_dir.into(),
             temp_dir: self.temp_dir.into(),
         })

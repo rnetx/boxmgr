@@ -1,4 +1,10 @@
-use std::{error::Error, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{
+    error::Error,
+    future::Future,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    pin::Pin,
+    sync::Arc,
+};
 
 use axum::{
     body::Body,
@@ -19,11 +25,63 @@ use crate::api;
 
 pub(crate) struct HTTPServer {
     router: Router<()>,
+    local_router: Option<Router<()>>,
     pub(crate) listen: SocketAddr,
+    pub(crate) local_listen_port: Option<u16>,
 }
 
 impl HTTPServer {
-    pub(crate) fn new(manager: Arc<super::Manager>, listen: SocketAddr, secret: String) -> Self {
+    pub(crate) fn new(
+        manager: Arc<super::Manager>,
+        listen: SocketAddr,
+        secret: String,
+        local_listen_port: Option<u16>,
+    ) -> Self {
+        Self {
+            router: Self::new_router(manager.clone(), secret),
+            local_router: match local_listen_port {
+                Some(_) => Some(Self::new_local_router(manager.clone())),
+                None => None,
+            },
+            listen,
+            local_listen_port,
+        }
+    }
+
+    pub(crate) async fn run(mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let tcp_listener = TcpListener::bind(self.listen).await?;
+        let local_listener_and_router = match self.local_listen_port {
+            Some(port) => Some((
+                TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)).await?,
+                self.local_router.take().unwrap(),
+            )),
+            None => None,
+        };
+        let local_listen_fut = async move {
+            match local_listener_and_router {
+                Some((tcp_listener, router)) => {
+                    axum::serve(tcp_listener, router.into_make_service())
+                        .await
+                        .map_err(|e| Into::<Box<dyn Error + Send + Sync>>::into(e.to_string()))
+                }
+                None => Ok(()),
+            }
+        };
+        let listen_fut = async move {
+            axum::serve(tcp_listener, self.router.into_make_service())
+                .await
+                .map_err(|e| Into::<Box<dyn Error + Send + Sync>>::into(e.to_string()))
+        };
+        let (res1, res2) = tokio::join!(local_listen_fut, listen_fut);
+        match (res1, res2) {
+            (Err(e1), Err(e2)) => Err(format!("local listen: {} | {}", e1, e2).into()),
+            (Err(e1), Ok(_)) => Err(e1),
+            (Ok(_), Err(e2)) => Err(e2),
+            (Ok(_), Ok(_)) => Ok(()),
+        }
+    }
+
+    fn new_router(manager: Arc<super::Manager>, secret: String) -> Router<()> {
         let mut api_router = Router::new();
         // API
         api_router = api_router
@@ -49,15 +107,33 @@ impl HTTPServer {
             .nest_service("/", get(webui))
             .fallback(|| async { Redirect::temporary("/") });
         router = router.nest_service("/api/v1", api_router);
-        //
-        Self { router, listen }
+        router
     }
 
-    pub(crate) async fn run(self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        let tcp_listener = TcpListener::bind(self.listen).await?;
-        axum::serve(tcp_listener, self.router)
-            .await
-            .map_err(|e| format!("{}", e).into())
+    fn new_local_router(manager: Arc<super::Manager>) -> Router<()> {
+        let mut api_router = Router::new();
+        // API
+        api_router = api_router
+            .merge(Self::config_router())
+            .merge(Self::kv_router())
+            .merge(Self::script_router())
+            .merge(Self::service_router());
+        // Request Body Limit
+        // 256 MB
+        api_router = api_router
+            .layer(DefaultBodyLimit::disable())
+            .layer(RequestBodyLimitLayer::new(256 * 1024 * 1024));
+        // Cors
+        // api_router = Self::cors(api_router);
+        //
+        let api_router = api_router.with_state::<()>(manager);
+        //
+        let mut router = Router::new();
+        router = router
+            .nest_service("/", get(webui))
+            .fallback(|| async { Redirect::temporary("/") });
+        router = router.nest_service("/api/v1", api_router);
+        router
     }
 
     fn config_router() -> Router<Arc<super::Manager>> {

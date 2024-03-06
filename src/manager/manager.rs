@@ -19,6 +19,7 @@ pub struct ManagerOptions {
     pub database_url: Option<String>,
     pub secret: String,
     pub listen: SocketAddr,
+    pub local_listen_port: Option<u16>,
     pub data_dir: PathBuf,
     pub temp_dir: PathBuf,
 }
@@ -55,7 +56,12 @@ impl Manager {
         *s.service.write().unwrap() = Some(service);
         //
         // Set HTTP Server
-        let http_server = super::HTTPServer::new(s.clone(), options.listen, options.secret);
+        let http_server = super::HTTPServer::new(
+            s.clone(),
+            options.listen,
+            options.secret,
+            options.local_listen_port,
+        );
         *s.http_server.lock().unwrap() = Some(http_server);
         //
         Ok(s)
