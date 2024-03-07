@@ -1,94 +1,147 @@
 extern crate boxmgr;
 
-use std::{fs, net::SocketAddr, process::exit};
+mod windows;
 
-use boxmgr::manager::{Manager as boxManager, ManagerOptions};
+use std::{fs, process::exit, sync::Arc};
 
-use clap::Parser;
+use boxmgr::manager::{Manager as boxManager, ManagerOptions, ManagerRawOptions};
+
+use clap::{Args, Parser, Subcommand};
 use tokio_util::sync::CancellationToken;
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(version, about = "a sing-box manager", long_about = None)]
 struct Cli {
+    #[command(flatten)]
+    args: GlobalArgs,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Debug, Args)]
+struct GlobalArgs {
     #[clap(short, long, default_value = "config.json")]
     config: String,
+
+    #[cfg(target_os = "windows")]
+    #[clap(long)]
+    as_windows_service: bool,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct Options {
-    log_level: String,
-    log_file: Option<String>,
-    database_url: Option<String>,
-    secret: String,
-    listen: SocketAddr,
-    local_listen_port: Option<u16>,
-    data_dir: String,
-    temp_dir: String,
+#[derive(Debug, Subcommand)]
+enum Commands {
+    Run,
+
+    #[cfg(target_os = "windows")]
+    InstallService(InstallServiceArgs),
+
+    #[cfg(target_os = "windows")]
+    UninstallService,
+
+    #[cfg(target_os = "windows")]
+    StartService,
+
+    #[cfg(target_os = "windows")]
+    StopService,
 }
 
-impl Options {
-    fn to_manager_options(self) -> Result<ManagerOptions, String> {
-        let log_file = match self.log_file {
-            Some(f) => match f.as_str() {
-                "stdout" | "" => boxmgr::log::LogOutput::stdout(),
-                "stderr" => boxmgr::log::LogOutput::stderr(),
-                "off" => boxmgr::log::LogOutput::nop(),
-                _ => boxmgr::log::LogOutput::file(&f).map_err(|e| e.to_string())?,
-            },
-            None => boxmgr::log::LogOutput::stdout(),
-        };
-        Ok(ManagerOptions {
-            log_level: self.log_level,
-            log_file,
-            database_url: self.database_url,
-            secret: self.secret,
-            listen: self.listen,
-            local_listen_port: self.local_listen_port,
-            data_dir: self.data_dir.into(),
-            temp_dir: self.temp_dir.into(),
-        })
+#[cfg(target_os = "windows")]
+#[derive(Debug, Args)]
+struct InstallServiceArgs {
+    #[clap(long)]
+    binary_path: Option<String>,
+
+    #[clap(long)]
+    config_path: Option<String>,
+
+    #[clap(long)]
+    auto_start: bool,
+}
+
+fn main() {
+    let cli = Cli::parse();
+    match cli.command {
+        Commands::Run => {
+            cfg_if::cfg_if! {
+                if #[cfg(target_os = "windows")] {
+                    if cli.args.as_windows_service {
+                        windows::run_as_service();
+                    } else {
+                        run_command(cli.args);
+                    }
+                } else {
+                    run_command(cli.args);
+                }
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        Commands::InstallService(args) => windows::install_windows_service(
+            cli.args,
+            args.binary_path,
+            args.config_path,
+            args.auto_start,
+        ),
+
+        #[cfg(target_os = "windows")]
+        Commands::UninstallService => windows::uninstall_windows_service(),
+
+        #[cfg(target_os = "windows")]
+        Commands::StartService => windows::start_windows_service(),
+
+        #[cfg(target_os = "windows")]
+        Commands::StopService => windows::stop_windows_service(),
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let cli = Cli::parse();
-    let config_content = match fs::read_to_string(cli.config) {
+async fn run_prepare(global_args: GlobalArgs) -> Arc<boxManager> {
+    let config_content = match fs::read_to_string(global_args.config) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Failed to read config file: {}", e);
             exit(1);
         }
     };
-    let options: Options = match serde_json::from_str(&config_content) {
+    let options: ManagerRawOptions = match serde_json::from_str(&config_content) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Failed to parse config file: {}", e);
             exit(1);
         }
     };
-    let options = match options.to_manager_options() {
+    let options = match ManagerOptions::try_from(options) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Failed to prepare log output: {}", e);
             exit(1);
         }
     };
-    let manager = match boxManager::prepare(options).await {
+    match boxManager::prepare(options).await {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Failed to prepare manager: {}", e);
             exit(1);
         }
-    };
-    let token = CancellationToken::new();
-    let token_ctrlc = token.clone();
-    ctrlc::set_handler(move || {
-        token_ctrlc.cancel();
-    })
-    .unwrap();
-    if let Err(e) = manager.run(token).await {
-        eprintln!("Failed to run manager: {}", e);
-        exit(1);
     }
+}
+
+fn run_command(global_args: GlobalArgs) {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async move {
+        let manager = run_prepare(global_args).await;
+        let token = CancellationToken::new();
+        let token_ctrlc = token.clone();
+        ctrlc::set_handler(move || {
+            token_ctrlc.cancel();
+        })
+        .unwrap();
+        if let Err(e) = manager.run(token).await {
+            eprintln!("Failed to run manager: {}", e);
+            exit(1);
+        }
+    });
 }

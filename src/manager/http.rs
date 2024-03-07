@@ -88,7 +88,8 @@ impl HTTPServer {
             .merge(Self::config_router())
             .merge(Self::kv_router())
             .merge(Self::script_router())
-            .merge(Self::service_router());
+            .merge(Self::service_router())
+            .merge(Self::manager_router());
         api_router = api_router.layer(AsyncRequireAuthorizationLayer::new(AuthMiddleware {
             secret,
         }));
@@ -117,7 +118,8 @@ impl HTTPServer {
             .merge(Self::config_router())
             .merge(Self::kv_router())
             .merge(Self::script_router())
-            .merge(Self::service_router());
+            .merge(Self::service_router())
+            .merge(Self::manager_router());
         // Request Body Limit
         // 256 MB
         api_router = api_router
@@ -217,6 +219,14 @@ impl HTTPServer {
             .route("/service/log", get(api::service::get_log))
     }
 
+    fn manager_router() -> Router<Arc<super::Manager>> {
+        Router::new().route(
+            "/manager/request_to_exit",
+            get(api::manager::request_to_exit),
+        )
+    }
+
+    #[allow(dead_code)]
     fn cors<T: Clone + Send + Sync + 'static>(router: Router<T>) -> Router<T> {
         router.layer(
             CorsLayer::new()

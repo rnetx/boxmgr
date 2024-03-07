@@ -580,10 +580,10 @@ impl Service {
         if let Some(mut inner) = inner_lock.take() {
             inner.cancel_and_wait().await;
         }
-        let (core_path, config) = self
-            .get_start_prepare_info()
-            .await
-            .map_err(|e| super::Error::StartServiceFailed(e.to_string()))?;
+        let (core_path, config) = self.get_start_prepare_info().await.map_err(|e| {
+            log::error!("service: prepare info failed: {}", e);
+            super::Error::StartServiceFailed(e.to_string())
+        })?;
         let inner = ServiceInner::new(
             self.manager.clone(),
             core_path,
@@ -592,7 +592,10 @@ impl Service {
             self.status.clone(),
         )
         .await
-        .map_err(|e| super::Error::StartServiceFailed(e.to_string()))?;
+        .map_err(|e| {
+            log::error!("service: start service failed: {}", e);
+            super::Error::StartServiceFailed(e.to_string())
+        })?;
         inner_lock.replace(inner);
         Ok(())
     }
@@ -646,13 +649,16 @@ impl Service {
     pub(crate) fn default_core_filename() -> String {
         const NAME: &str = "sing-box";
 
-        let mut filename = PathBuf::from(NAME);
+        #[cfg(not(target_os = "windows"))]
+        {
+            PathBuf::from(NAME).to_string_lossy().to_string()
+        }
 
         #[cfg(target_os = "windows")]
         {
+            let mut filename = PathBuf::from(NAME);
             filename.set_extension("exe");
+            filename.to_string_lossy().to_string()
         }
-
-        filename.to_string_lossy().to_string()
     }
 }

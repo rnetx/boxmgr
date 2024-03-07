@@ -109,7 +109,6 @@ where
     B: serde::de::DeserializeOwned,
 {
     pub(crate) manager: Arc<manager::Manager>,
-    pub(crate) req: Request<()>,
     pub(crate) path_params: Option<Path<P>>,
     pub(crate) body: Json<B>,
 }
@@ -128,16 +127,11 @@ where
     ) -> Result<Self, Self::Rejection> {
         let path_params = req.extract_parts::<Path<P>>().await.ok();
         //
-        let (parts, body) = req.into_parts();
-        let req_empty_body = Request::from_parts(parts, ());
-        let req_body = req_empty_body.clone().map(|_| body);
-        //
-        let json_body = Json::<B>::from_request(req_body, state)
+        let json_body = Json::<B>::from_request(req, state)
             .await
             .map_err(|e| ErrorResponse::new(StatusCode::BAD_REQUEST, e.to_string()))?;
         Ok(Self {
             manager: state.clone(),
-            req: req_empty_body,
             path_params,
             body: json_body,
         })

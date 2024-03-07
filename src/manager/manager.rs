@@ -13,6 +13,18 @@ use crate::{
     service::{self, Service},
 };
 
+#[derive(Debug, serde::Deserialize)]
+pub struct ManagerRawOptions {
+    log_level: String,
+    log_file: Option<String>,
+    database_url: Option<String>,
+    secret: String,
+    listen: SocketAddr,
+    local_listen_port: Option<u16>,
+    data_dir: String,
+    temp_dir: String,
+}
+
 pub struct ManagerOptions {
     pub log_level: String,
     pub log_file: crate::log::LogOutput,
@@ -24,6 +36,32 @@ pub struct ManagerOptions {
     pub temp_dir: PathBuf,
 }
 
+impl TryFrom<ManagerRawOptions> for ManagerOptions {
+    type Error = Box<dyn Error + Send + Sync>;
+
+    fn try_from(options: ManagerRawOptions) -> Result<Self, Self::Error> {
+        let log_file = match options.log_file {
+            Some(f) => match f.as_str() {
+                "stdout" | "" => crate::log::LogOutput::stdout(),
+                "stderr" => crate::log::LogOutput::stderr(),
+                "off" => crate::log::LogOutput::nop(),
+                _ => crate::log::LogOutput::file(&f).map_err(|e| e.to_string())?,
+            },
+            None => crate::log::LogOutput::stdout(),
+        };
+        Ok(ManagerOptions {
+            log_level: options.log_level,
+            log_file,
+            database_url: options.database_url,
+            secret: options.secret,
+            listen: options.listen,
+            local_listen_port: options.local_listen_port,
+            data_dir: options.data_dir.into(),
+            temp_dir: options.temp_dir.into(),
+        })
+    }
+}
+
 pub struct Manager {
     database_url: Option<String>,
     database: sync::RwLock<Option<Database>>,
@@ -31,6 +69,7 @@ pub struct Manager {
     http_server: sync::Mutex<Option<super::HTTPServer>>,
     data_dir: PathBuf,
     temp_dir: PathBuf,
+    exit_token: CancellationToken,
 }
 
 impl Manager {
@@ -50,6 +89,7 @@ impl Manager {
             http_server: sync::Mutex::new(None),
             data_dir: options.data_dir,
             temp_dir: options.temp_dir,
+            exit_token: CancellationToken::new(),
         });
         // Set Service
         let service = service::Service::new(s.clone());
@@ -101,8 +141,13 @@ impl Manager {
         })?;
         log::info!("Service is started");
         log::info!("HTTP Server is running on {}", &http_server.listen);
+        let exit_token = self.exit_token.clone();
         tokio::select! {
             _ = cancel_token.cancelled() => {}
+            _ = exit_token.cancelled() => {
+                log::warn!("request to exit...");
+                cancel_token.cancel();
+            }
             res = http_server.run() => {
                 res?
             }
@@ -132,5 +177,9 @@ impl Manager {
 
     pub(crate) fn get_temp_dir_path(&self) -> &PathBuf {
         &self.temp_dir
+    }
+
+    pub(crate) fn request_exit(&self) {
+        self.exit_token.cancel();
     }
 }
