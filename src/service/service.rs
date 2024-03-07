@@ -75,10 +75,22 @@ impl ServiceInner {
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         *status.running_config.write().unwrap() = config.tag.clone();
         status.notify();
-        let script_handler = super::ScriptHandler::new(manager).await?;
+        let script_handler = super::ScriptHandler::new(manager).await.map_err(|err| {
+            log::error!("service: script handler init failed: {}", &err);
+            Into::<Box<dyn Error + Send + Sync>>::into(format!(
+                "service: script handler init failed: {}",
+                err
+            ))
+        })?;
         // Check Config
         let (listen, secret) = Self::check_config(&mut config.config)?;
-        let listen = SocketAddr::from_str(&listen)?;
+        let listen = SocketAddr::from_str(&listen).map_err(|err| {
+            log::error!("service: clash api: invalid listen address: {}", &err);
+            Into::<Box<dyn Error + Send + Sync>>::into(format!(
+                "service: invalid listen address: {}",
+                err
+            ))
+        })?;
 
         // Set Permission
         #[cfg(unix)]
@@ -92,11 +104,17 @@ impl ServiceInner {
         }
 
         // Get Core Info
-        let version_output = Command::new(&core_path)
+        let version_output = std::process::Command::new(&core_path)
             .args(["version"])
             .output()
-            .await
-            .map(|output| String::from_utf8_lossy(&output.stdout).to_string())?;
+            .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+            .map_err(|err| {
+                log::error!("service: get core version failed: {}", &err);
+                Into::<Box<dyn Error + Send + Sync>>::into(format!(
+                    "service: get core version failed: {}",
+                    err
+                ))
+            })?;
         for line in version_output.split('\n').collect::<Vec<&str>>() {
             let line = line.trim();
             if line.starts_with("sing-box version") {
