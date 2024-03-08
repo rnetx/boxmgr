@@ -40,9 +40,18 @@
           />
         </el-space>
       </el-form-item>
+      <el-form-item :label="$t('setting.exit')">
+        <el-button
+          type="danger"
+          @click="requestToExitCheckDialogVisible = true"
+        >
+          {{ $t('setting.request_to_exit') }}
+        </el-button>
+      </el-form-item>
     </el-form>
   </div>
 
+  <!-- upload core dialog -->
   <el-dialog
     v-model="uploadCoreDialogVisible"
     :title="$t('setting.upload_core_title')"
@@ -81,6 +90,39 @@
       </div>
     </template>
   </el-dialog>
+
+  <!-- request to exit check dialog -->
+  <el-dialog
+    v-model="requestToExitCheckDialogVisible"
+    :title="$t('setting.request_to_exit_check_title')"
+    width="500"
+    center
+    :close-on-click-modal="false"
+    :close-on-press-escape="false"
+  >
+    <span>{{ $t('setting.request_to_exit_check_body') }}</span>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="requestToExitCheckDialogVisible = false">
+          {{ $t('generic.cancel') }}
+        </el-button>
+        <el-button type="danger" @click="requestToExitCheckHandle">
+          {{ $t('generic.confirm') }}
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
+
+  <!-- exited dialog -->
+  <el-dialog
+    v-model="exitedDialogVisible"
+    :title="$t('setting.exited')"
+    width="500"
+    center
+    :close-on-click-modal="false"
+    :close-on-press-escape="false"
+    :show-close="false"
+  />
 </template>
 
 <script setup>
@@ -96,6 +138,7 @@ import {
   setAutoStart,
   getAutoStart,
 } from '@/api/service';
+import { requestToExit } from '@/api/manager';
 
 const { t, locale } = useI18n();
 
@@ -109,6 +152,8 @@ const autoStart = ref(false);
 const isAutoStartLoading = ref(false);
 const uploadCoreDialogVisible = ref(false);
 const uploadCoreList = ref([]);
+const requestToExitCheckDialogVisible = ref(false);
+const exitedDialogVisible = ref(false);
 
 const refreshGetCorePath = () => {
   isCorePathLoading.value = true;
@@ -235,6 +280,28 @@ const setAutoStartHandle = () => {
       });
       console.log('set auto start failed: ', err);
       isAutoStartLoading.value = false;
+    });
+};
+
+const requestToExitCheckHandle = () => {
+  const exiting = ElLoading.service({
+    lock: true,
+    text: t('setting.exiting'),
+  });
+  requestToExitCheckDialogVisible.value = false;
+  requestToExit()
+    .then(() => {
+      exiting.close();
+      exitedDialogVisible.value = true;
+    })
+    .catch((err) => {
+      ElMessage({
+        showClose: true,
+        type: 'error',
+        message: t('setting.exit_failed', { err: err }),
+      });
+      console.log('exit failed: ', err);
+      exiting.close();
     });
 };
 

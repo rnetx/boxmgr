@@ -107,7 +107,14 @@
       "upload_info_or": "或者",
       "upload_info_suffix": "点击上传",
       "upload": "上传",
-      "uploading": "上传中..."
+      "uploading": "上传中...",
+      "exit": "退出",
+      "request_to_exit": "请求退出",
+      "request_to_exit_check_title": "请求退出",
+      "request_to_exit_check_body": "警告！你将退出程序，将无法再访问面板，是否继续？",
+      "exiting": "退出中...",
+      "exit_failed": "退出失败：{err}",
+      "exited": "已退出"
     },
     "generic": {
       "tag": "标签",

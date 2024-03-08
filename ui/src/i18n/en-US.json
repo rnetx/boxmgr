@@ -107,7 +107,14 @@
       "upload_info_or": "or",
       "upload_info_suffix": "click to upload",
       "upload": "Upload",
-      "uploading": "Uploading..."
+      "uploading": "Uploading...",
+      "exit": "Exit",
+      "request_to_exit": "Request to Exit",
+      "request_to_exit_check_title": "Request to Exit",
+      "request_to_exit_check_body": "Warning! You are about to exit the program and will no longer have access to the panel. Do you want to continue?",
+      "exiting": "Exiting...",
+      "exit_failed": "Exit failed: {err}",
+      "exited": "Exited"
     },
     "generic": {
       "tag": "Tag",

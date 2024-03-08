@@ -39,7 +39,7 @@ export default defineConfig({
 
   server: {
     watch: {
-      usePolling: true, // 修复HMR热更新失效
+      usePolling: true,
     },
   },
 });
