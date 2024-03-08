@@ -249,6 +249,40 @@ pub(super) fn stop_windows_service() {
     }
 }
 
+pub(super) fn get_windows_service_status() {
+    let manager_access = ServiceManagerAccess::CONNECT;
+    let service_manager = match ServiceManager::local_computer(None::<&str>, manager_access) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Failed to open service manager: {}", e);
+            exit(1);
+        }
+    };
+
+    let service_access = ServiceAccess::QUERY_STATUS;
+    let service = match service_manager.open_service(SERVICE_NAME, service_access) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Failed to open service: {}", e);
+            exit(1);
+        }
+    };
+
+    let status = match service.query_status() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Failed to query service status: {}", e);
+            exit(1);
+        }
+    };
+
+    if status.current_state == ServiceState::Running {
+        println!("Service is running");
+    } else {
+        println!("Service is not running");
+    }
+}
+
 fn run_service(args: super::GlobalArgs) -> Result<(), Box<dyn Error + Send + Sync>> {
     let token = CancellationToken::new();
     let token_event_handler = token.clone();

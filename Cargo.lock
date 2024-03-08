@@ -1693,8 +1693,11 @@ version = "8.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a82c0bbc10308ed323529fd3c1dce8badda635aa319a5ff0e6466f33b8101e3f"
 dependencies = [
+ "axum",
+ "mime_guess",
  "rust-embed-impl",
  "rust-embed-utils",
+ "tokio",
  "walkdir",
 ]
 

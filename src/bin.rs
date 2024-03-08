@@ -44,6 +44,9 @@ enum Commands {
 
     #[cfg(target_os = "windows")]
     StopService,
+
+    #[cfg(target_os = "windows")]
+    GetServiceStatus,
 }
 
 #[cfg(target_os = "windows")]
@@ -92,6 +95,9 @@ fn main() {
 
         #[cfg(target_os = "windows")]
         Commands::StopService => windows::stop_windows_service(),
+
+        #[cfg(target_os = "windows")]
+        Commands::GetServiceStatus => windows::get_windows_service_status(),
     }
 }
 
