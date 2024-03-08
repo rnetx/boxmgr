@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build-frontend:
+    name: Build Frontend
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+
+      - name: Install dependencies
+        run: npm install -g pnpm
+
+      - name: Prepare Frontend
+        run: cd ui && pnpm install
+
+      - name: Build Frontend
+        run: cd ui && pnpm run build
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-ui
+          path: |
+            ui/dist
+
+      - name: Prepare To Release
+        run: zip -r frontend.zip ui/dist
+
+      - name: Upload To Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: frontend.zip
+          asset_name: frontend.zip
+          tag: ${{ github.ref }}
+
+  build-backend:
+    name: Build Backend ${{ matrix.platform.release_for }}
+    needs: build-frontend
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - release_for: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: boxmgr.exe
+            name: boxmgr-Windows-x86_64.zip
+            command: both
+
+          - release_for: Linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: boxmgr
+            name: boxmgr-Linux-x86_64.tar.gz
+            command: both
+
+          - release_for: Linux-aarch64-gnu
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            bin: boxmgr
+            name: boxmgr-Linux-aarch64-gnu.tar.gz
+            command: both
+
+          - release_for: Linux-aarch64-musl
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            bin: boxmgr
+            name: boxmgr-Linux-aarch64-musl.tar.gz
+            command: both
+
+          - release_for: macOS-x86_64
+            os: macOS-latest
+            target: x86_64-apple-darwin
+            bin: boxmgr
+            name: boxmgr-Darwin-x86_64.tar.gz
+            command: both
+
+          - release_for: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: boxmgr
+            name: boxmgr-Darwin-x86_64.tar.gz
+            command: both
+
+    runs-on: ${{ matrix.platform.os }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Frontend UI
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-ui
+          path: ui/dist
+
+      - name: Build Backend
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: '--locked --release'
+          strip: true
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+          tag_name: ${{ github.ref }}
+          body: ${{ github.ref }}
