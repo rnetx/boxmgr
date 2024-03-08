@@ -1,5 +1,6 @@
 extern crate boxmgr;
 
+#[cfg(target_os = "windows")]
 mod windows;
 
 use std::{fs, process::exit, sync::Arc};
@@ -24,9 +25,8 @@ struct GlobalArgs {
     #[clap(short, long, default_value = "config.json")]
     config: String,
 
-    #[cfg(target_os = "windows")]
     #[clap(long)]
-    as_windows_service: bool,
+    as_windows_service: bool, // Just Windows
 }
 
 #[derive(Debug, Subcommand)]
